@@ -7,7 +7,7 @@ COPY requirements.txt /app
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install -r requirements.txt
 
-RUN python3 -m nltk.downloader vader_lexicon
+RUN python3 -m nltk.downloader vader_lexicon punkt
 
 COPY . /app
 

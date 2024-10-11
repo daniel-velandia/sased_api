@@ -11,61 +11,57 @@ def initialize_objects():
     return analyzer, translator
 
 def translate_text(text, translator):
-    try:
-        return translator.translate(text, src='es', dest='en').text
-    except Exception as e:
-        print(f"Error al traducir: {e}")
-        return text
+    return translator.translate(text, src='es', dest='en').text
 
 def analyze_sentiments(text, analyzer):
     return analyzer.polarity_scores(text)
 
+def calculate_averages(scores):
+    return {
+        'compound_average': sum([s['compound'] for s in scores]) / len(scores) if scores else 0,
+        'neg_average': sum([s['neg'] for s in scores]) / len(scores) if scores else 0,
+        'neu_average': sum([s['neu'] for s in scores]) / len(scores) if scores else 0,
+        'pos_average': sum([s['pos'] for s in scores]) / len(scores) if scores else 0
+    }
+
 def process_criticisms(df, analyzer, translator):
     results = []
-    grouped = df.groupby(['profesor', 'materia'])
     teacher_scores = {}
-
+    
+    grouped = df.groupby(['profesor', 'materia'])
+    
     for (teacher, subject), group in grouped:
         subject_results = []
 
         if teacher not in teacher_scores:
-            teacher_scores[teacher] = {'neg': [], 'neu': [], 'pos': [], 'compound': []}
+            teacher_scores[teacher] = {'scores': []}
 
         for criticism in group['crítica'].dropna():
             criticism_en = translate_text(criticism, translator)
             scores = analyze_sentiments(criticism_en, analyzer)
-            result = {
-                'Compound': scores['compound'],
-                'criticism': criticism,
-                'negative': scores['neg'],
-                'neutral': scores['neu'],
-                'positive': scores['pos']
-            }
-            subject_results.append(result)
-            teacher_scores[teacher]['neg'].append(scores['neg'])
-            teacher_scores[teacher]['neu'].append(scores['neu'])
-            teacher_scores[teacher]['pos'].append(scores['pos'])
-            teacher_scores[teacher]['compound'].append(scores['compound'])
 
-        subject_average = {
-            'subject': subject,
-            'compound_average': sum([r['Compound'] for r in subject_results]) / len(subject_results) if subject_results else 0,
-            'criticisms': subject_results
-        }
-        
+            subject_results.append({
+                'compound': scores['compound'],
+                'criticism': criticism,
+                'neg': scores['neg'],
+                'neu': scores['neu'],
+                'pos': scores['pos']
+            })
+            teacher_scores[teacher]['scores'].append(scores)
+
+        subject_average = calculate_averages(subject_results)
+        subject_average.update({'subject': subject, 'criticisms': subject_results})
+
         results.append({'teacher': teacher, 'subject': subject_average})
 
     final_results = []
-    for teacher, scores in teacher_scores.items():
-        average_scores = {
+    for teacher, data in teacher_scores.items():
+        teacher_average = calculate_averages(data['scores'])
+        teacher_average.update({
             'teacher': teacher,
-            'compound_average': sum(scores['compound']) / len(scores['compound']) if scores['compound'] else 0,
-            'negative_average': sum(scores['neg']) / len(scores['neg']) if scores['neg'] else 0,
-            'neutral_average': sum(scores['neu']) / len(scores['neu']) if scores['neu'] else 0,
-            'positive_average': sum(scores['pos']) / len(scores['pos']) if scores['pos'] else 0,
             'subjects': [r['subject'] for r in results if r['teacher'] == teacher]
-        }
-        final_results.append(average_scores)
+        })
+        final_results.append(teacher_average)
 
     return final_results
 
@@ -87,10 +83,8 @@ def analyze():
                 results = process_criticisms(df, analyzer, translator)
                 return jsonify(results)
             except Exception as e:
-                print(f"Error al leer el archivo o procesar datos: {e}")
                 return jsonify({'error': f'Error processing the file: {str(e)}'}), 500
     except Exception as e:
-        print(f"Error en la solicitud: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == "__main__":
