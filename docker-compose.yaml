@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ./app
+    ports:
+      - '8000:8000'
+    environment:
+      - MONGO_URI=mongodb://admin:admin_password@mongo:27017/analisis_sentimientos
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:latest
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin_password
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

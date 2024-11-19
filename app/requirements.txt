@@ -1,5 +1,7 @@
 Flask
+flask-cors
 pandas
 nltk
 googletrans==4.0.0-rc1
 openpyxl
+pymongo

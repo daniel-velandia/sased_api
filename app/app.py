@@ -1,9 +1,19 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pandas as pd
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from googletrans import Translator
+from pymongo import MongoClient
+from datetime import datetime
 
 app = Flask(__name__)
+
+CORS(app)
+
+# Configuración de MongoDB
+client = MongoClient("mongodb://admin:admin_password@mongo:27017/")
+db = client["analisis_sentimientos"]
+collection = db["resultados"]
 
 def initialize_objects():
     analyzer = SentimentIntensityAnalyzer()
@@ -18,10 +28,7 @@ def analyze_sentiments(text, analyzer):
 
 def calculate_averages(scores):
     return {
-        'compound_average': sum([s['compound'] for s in scores]) / len(scores) if scores else 0,
-        'neg_average': sum([s['neg'] for s in scores]) / len(scores) if scores else 0,
-        'neu_average': sum([s['neu'] for s in scores]) / len(scores) if scores else 0,
-        'pos_average': sum([s['pos'] for s in scores]) / len(scores) if scores else 0
+        'compound_average': sum([s['compound'] for s in scores]) / len(scores) if scores else 0
     }
 
 def process_criticisms(df, analyzer, translator):
@@ -42,10 +49,7 @@ def process_criticisms(df, analyzer, translator):
 
             subject_results.append({
                 'compound': scores['compound'],
-                'criticism': criticism,
-                'neg': scores['neg'],
-                'neu': scores['neu'],
-                'pos': scores['pos']
+                'criticism': criticism
             })
             teacher_scores[teacher]['scores'].append(scores)
 
@@ -65,6 +69,20 @@ def process_criticisms(df, analyzer, translator):
 
     return final_results
 
+def get_current_semester():
+    month = datetime.now().month
+    year = datetime.now().year
+    semester = 1 if month <= 6 else 2
+    return f"{year}-S{semester}"
+
+def get_previous_semester():
+    month = datetime.now().month
+    year = datetime.now().year
+    if month <= 6:
+        return f"{year - 1}-S2"
+    else:
+        return f"{year}-S1"
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
@@ -81,7 +99,25 @@ def analyze():
                 df = pd.read_excel(file)
                 analyzer, translator = initialize_objects()
                 results = process_criticisms(df, analyzer, translator)
-                return jsonify(results)
+                
+                current_semester = get_current_semester()
+                collection.replace_one(
+                    {"semester": current_semester},
+                    {
+                        "semester": current_semester,
+                        "date": datetime.now(),
+                        "results": results
+                    },
+                    upsert=True
+                )
+                
+                previous_semester = get_previous_semester()
+                previous_analysis = collection.find_one({"semester": previous_semester})
+                
+                return jsonify({
+                    'current_semester_analysis': results,
+                    'previous_semester_analysis': previous_analysis['results'] if previous_analysis else 'No analysis found for the previous semester'
+                })
             except Exception as e:
                 return jsonify({'error': f'Error processing the file: {str(e)}'}), 500
     except Exception as e:

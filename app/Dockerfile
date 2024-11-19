@@ -1,29 +1,21 @@
 # syntax=docker/dockerfile:1.4
-FROM --platform=$BUILDPLATFORM python:3.10 AS builder
+FROM python:3.10 AS builder
 
+# Definir el directorio de trabajo
 WORKDIR /app
 
-COPY requirements.txt /app
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r requirements.txt
+# Copiar el archivo de requerimientos
+COPY requirements.txt .
 
-RUN python3 -m nltk.downloader vader_lexicon punkt
+# Instalar dependencias desde requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
+# Descargar archivos adicionales de NLTK
+RUN python -m nltk.downloader vader_lexicon punkt
 
-ENTRYPOINT ["python3"]
+# Copiar el resto de los archivos de la aplicación
+COPY . .
+
+# Configurar el punto de entrada
+ENTRYPOINT ["python"]
 CMD ["app.py"]
-
-FROM builder as dev-envs
-
-RUN <<EOF
-apk update
-apk add git
-EOF
-
-RUN <<EOF
-addgroup -S docker
-adduser -S --shell /bin/bash --ingroup docker vscode
-EOF
-# install Docker tools (cli, buildx, compose)
-COPY --from=gloursdocker/docker / /
