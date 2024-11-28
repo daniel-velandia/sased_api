@@ -116,7 +116,7 @@ def analyze():
                 
                 return jsonify({
                     'current_semester_analysis': results,
-                    'previous_semester_analysis': previous_analysis['results'] if previous_analysis else 'No analysis found for the previous semester'
+                    'previous_semester_analysis': previous_analysis['results'] if previous_analysis else []
                 })
             except Exception as e:
                 return jsonify({'error': f'Error processing the file: {str(e)}'}), 500
